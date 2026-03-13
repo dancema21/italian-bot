@@ -4,6 +4,36 @@ A Telegram bot to learn Italian via AI-powered roleplay conversations, with spac
 
 ---
 
+## Features
+
+### Conversation roleplay (`/learn`)
+Pick a CEFR level (A1 → B2) and a topic. The bot plays a character in an immersive Italian scene — a waiter, a shopkeeper, a colleague — and steers the conversation so you naturally use the topic's vocabulary. It never interrupts to correct you; errors are silently tracked and surfaced at the end.
+
+### Verb tense training (`/verbs`)
+Choose a specific tense (Présent, Passé composé, Imparfait, Futur, Conditionnel, Subjonctif…) and the bot generates a scene designed to force you to use that tense repeatedly.
+
+### Voice notes
+Reply to the bot with a voice note instead of text. The audio is transcribed verbatim by Gemini (without correcting your Italian errors) and fed into the conversation.
+
+### Session recap
+At the end of each session — either when you type `END` or when the bot naturally closes the scene — you get:
+- A structured error recap (❌ what you said → ✅ corrected Italian → 🇫🇷 French translation + error category)
+- Vocabulary tips: words you overused or phrases that are grammatically correct but unnatural for native speakers
+
+### Spaced-repetition flashcards (`/flashcards`)
+Every error and vocabulary tip from your sessions is automatically turned into a flashcard using the SM-2 algorithm. Cards are shown front (French) → reveal back (Italian) → rate Correct / Incorrect. The algorithm schedules the next review based on your rating.
+
+### Translation (`/translate`)
+Enter any word or phrase in French or Italian. The bot detects the language, corrects spelling, translates it, and generates a natural example sentence in both languages. You can save the result as a flashcard in one tap.
+
+### Progress & stats (`/progress`, `/stats`)
+Track how many times you have trained each topic, and see your error statistics broken down by category (conjugation, agreement, vocabulary, prepositions, etc.).
+
+### Admin portal
+A local Streamlit app (`admin/app.py`) to manage the user whitelist, edit or delete flashcards, and browse session history and error statistics per user.
+
+---
+
 ## Prerequisites
 
 | What | Where to get it |
@@ -83,9 +113,10 @@ The bot uses long-polling so no webhook configuration is needed.
 | `/help` | Show available commands |
 | `/learn` | Start a conversation session by CEFR level and topic |
 | `/verbs` | Practice a specific verb tense |
-| `/flashcards` | Review due error flashcards (SM-2 spaced repetition) |
+| `/flashcards` | Review due flashcards (SM-2 spaced repetition) |
+| `/translate` | Translate a word or phrase between French and Italian |
 | `/progress` | View your session count per topic |
-| `/stats` | View your error statistics |
+| `/stats` | View your error statistics by category |
 
 ---
 
@@ -96,13 +127,14 @@ bot/
 ├── main.py              # Entry point, message router, handler registration
 ├── handlers/
 │   ├── start.py         # /start, /help
-│   ├── learn.py         # /learn flow + active conversation
+│   ├── learn.py         # /learn flow + active conversation + recap
 │   ├── verbs.py         # /verbs flow
 │   ├── flashcards.py    # /flashcards review
+│   ├── translate.py     # /translate command
 │   ├── progress.py      # /progress
 │   └── stats.py         # /stats
 ├── services/
-│   ├── gemini.py        # All Gemini API calls (scene gen, chat, recap)
+│   ├── gemini.py        # All Gemini API calls (scene gen, chat, recap, translation)
 │   ├── supabase.py      # All database operations
 │   └── sm2.py           # SM-2 spaced repetition algorithm
 └── utils/
