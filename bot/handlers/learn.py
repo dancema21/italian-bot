@@ -13,6 +13,7 @@ from bot.services.gemini import (
     send_message,
     generate_recap,
     extract_errors,
+    extract_vocab_tips,
     detect_vocabulary_usage,
     transcribe_voice,
 )
@@ -257,7 +258,7 @@ async def _trigger_recap(update: Update, telegram_id: int, session: dict):
     ]
 
     try:
-        recap = await generate_recap(
+        recap_raw = await generate_recap(
             errors=session["errors_detected"],
             target_vocabulary=session["target_vocabulary"],
             vocabulary_used=session["vocabulary_used"],
@@ -265,8 +266,9 @@ async def _trigger_recap(update: Update, telegram_id: int, session: dict):
         )
     except Exception as e:
         logger.error(f"generate_recap failed: {e}")
-        recap = "Erreur lors de la génération du récapitulatif."
+        recap_raw = "Erreur lors de la génération du récapitulatif."
 
+    recap, vocab_tips = extract_vocab_tips(recap_raw)
     await update.message.reply_text(recap)
     await update.message.reply_text(
         "─────────────────\n"
@@ -288,6 +290,29 @@ async def _trigger_recap(update: Update, telegram_id: int, session: dict):
         db.create_flashcards(session["user_id"], error_ids)
     except Exception as e:
         logger.error(f"Error saving session data: {e}")
+
+    # Save vocabulary tips as flashcards
+    if vocab_tips:
+        try:
+            tip_errors = [
+                {
+                    "wrong": tip["original"],
+                    "corrected_it": tip["phrase_it"],
+                    "corrected_fr": tip["phrase_fr"],
+                    "category": "vocabulary_tip",
+                }
+                for tip in vocab_tips
+                if tip.get("phrase_it") and tip.get("phrase_fr")
+            ]
+            tip_ids = db.save_errors(
+                session_id=session["session_db_id"],
+                user_id=session["user_id"],
+                topic_id=session["topic_id"],
+                errors=tip_errors,
+            )
+            db.create_flashcards(session["user_id"], tip_ids)
+        except Exception as e:
+            logger.error(f"Error saving vocab tip flashcards: {e}")
 
     # Update topic progress (only for /learn sessions with a topic)
     if session["topic_id"] is not None:

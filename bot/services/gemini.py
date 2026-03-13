@@ -241,7 +241,12 @@ async def generate_recap(
         "- Each tip as a plain bullet point starting with •\n"
         "- Be specific and cite the actual words/phrases the user used.\n"
         "- If nothing notable: write '💡 Conseils de vocabulaire\n\nRien à signaler.'\n"
-        "- Do not repeat errors already listed above. Only include this vocabulary section, nothing else after it."
+        "- Do not repeat errors already listed above.\n\n"
+        "After the vocabulary section, on a HIDDEN final line output structured flashcard data using this EXACT format:\n"
+        '<!--VOCAB_TIPS:[{"original":"phrase the user wrote","phrase_it":"better Italian phrase","phrase_fr":"description en français pour la flashcard"}]-->\n'
+        "Include only tips genuinely worth memorising as flashcards (0 to 3 items). "
+        "Each phrase_fr should be a concise French label suitable as a flashcard front (e.g. 'Je voudrais (forme polie)'). "
+        "If no tips worth creating: <!--VOCAB_TIPS:[]-->"
     )
 
     try:
@@ -268,6 +273,20 @@ def extract_errors(text: str) -> tuple[str, list[dict]]:
             errors = []
         clean_text = re.sub(pattern, '', text).strip()
         return clean_text, errors
+    return text, []
+
+
+def extract_vocab_tips(text: str) -> tuple[str, list[dict]]:
+    """Parse and strip <!--VOCAB_TIPS:[...]--> tag from recap text."""
+    pattern = r'<!--VOCAB_TIPS:(.*?)-->'
+    match = re.search(pattern, text, re.DOTALL)
+    if match:
+        try:
+            tips = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            tips = []
+        clean_text = re.sub(pattern, '', text).strip()
+        return clean_text, tips
     return text, []
 
 
