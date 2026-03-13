@@ -275,6 +275,7 @@ async def _trigger_recap(update: Update, telegram_id: int, session: dict):
         "/learn — Nouvelle session par thème\n"
         "/verbs — Pratiquer un temps verbal\n"
         "/flashcards — Réviser tes erreurs\n"
+        "/traduire — Traduire un mot ou une phrase\n"
         "/progress — Ta progression\n"
         "/stats — Tes statistiques"
     )

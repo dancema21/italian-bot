@@ -290,6 +290,38 @@ def extract_vocab_tips(text: str) -> tuple[str, list[dict]]:
     return text, []
 
 
+async def translate_word(text: str) -> dict:
+    """Detect language (FR/IT), correct spelling, translate, return example sentences."""
+    prompt = (
+        f'The user entered: "{text}"\n\n'
+        "1. Detect whether this is French or Italian (ignore spelling mistakes).\n"
+        "2. Correct any spelling mistakes in the input.\n"
+        "3. Write one short, natural example sentence using the corrected word/phrase (source language).\n"
+        "4. Translate both the corrected word/phrase and the example sentence into the other language.\n\n"
+        "Reply ONLY with this JSON, no markdown, no backticks, raw JSON only:\n"
+        "{\n"
+        '  "source_lang": "fr",\n'
+        '  "source_word": "corrected word/phrase in source language",\n'
+        '  "source_sentence": "example sentence in source language",\n'
+        '  "target_word": "translation in target language",\n'
+        '  "target_sentence": "translated example sentence in target language"\n'
+        "}\n"
+        'source_lang must be "fr" if the input is French, "it" if Italian.'
+    )
+    try:
+        client = get_client()
+        response = await client.aio.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.3),
+        )
+        raw = _strip_code_fences(response.text)
+        return json.loads(raw)
+    except Exception as e:
+        logger.error(f"translate_word error: {e}")
+        raise
+
+
 def detect_vocabulary_usage(text: str, target_vocabulary: list) -> list[str]:
     """Return which target vocabulary words appear in the user's text (case-insensitive)."""
     text_lower = text.lower()

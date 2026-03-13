@@ -31,6 +31,7 @@ from bot.handlers.flashcards import (
 )
 from bot.handlers.progress import progress_handler
 from bot.handlers.stats import stats_handler
+from bot.handlers.translate import traduire_handler, traduire_save_callback
 from bot.utils.session import get_session
 
 logging.basicConfig(
@@ -73,6 +74,7 @@ def main():
     app.add_handler(CommandHandler("flashcards", flashcards_handler))
     app.add_handler(CommandHandler("progress", progress_handler))
     app.add_handler(CommandHandler("stats", stats_handler))
+    app.add_handler(CommandHandler("traduire", traduire_handler))
 
     # Callback queries
     app.add_handler(CallbackQueryHandler(learn_level_callback, pattern=r"^learn_level:"))
@@ -80,6 +82,7 @@ def main():
     app.add_handler(CallbackQueryHandler(verb_tense_callback, pattern=r"^verb_tense:"))
     app.add_handler(CallbackQueryHandler(flashcard_reveal_callback, pattern=r"^fc_reveal:"))
     app.add_handler(CallbackQueryHandler(flashcard_rating_callback, pattern=r"^fc_rate:"))
+    app.add_handler(CallbackQueryHandler(traduire_save_callback, pattern=r"^tr_save:"))
 
     # Text message router
     app.add_handler(

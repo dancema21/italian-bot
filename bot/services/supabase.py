@@ -236,6 +236,27 @@ def save_errors(session_id: int, user_id: int, topic_id: int | None, errors: lis
         return []
 
 
+def save_translation_flashcard(user_id: int, original: str, phrase_fr: str, phrase_it: str) -> bool:
+    """Save a /traduire result as a flashcard (no session or topic)."""
+    try:
+        db = get_supabase()
+        result = db.table("errors").insert({
+            "session_id": None,
+            "user_id": user_id,
+            "topic_id": None,
+            "wrong_phrase": original,
+            "corrected_phrase_it": phrase_it,
+            "corrected_phrase_fr": phrase_fr,
+            "error_category": "translation",
+        }).execute()
+        error_id = result.data[0]["id"]
+        create_flashcards(user_id, [error_id])
+        return True
+    except Exception as e:
+        logger.error(f"save_translation_flashcard error: {e}")
+        return False
+
+
 def get_user_errors(user_id: int) -> list[dict]:
     try:
         db = get_supabase()
