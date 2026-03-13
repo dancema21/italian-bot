@@ -31,7 +31,7 @@ from bot.handlers.flashcards import (
 )
 from bot.handlers.progress import progress_handler
 from bot.handlers.stats import stats_handler
-from bot.handlers.translate import traduire_handler, traduire_save_callback
+from bot.handlers.translate import translate_handler, translate_message_handler, traduire_save_callback, is_waiting
 from bot.utils.session import get_session
 
 logging.basicConfig(
@@ -56,6 +56,11 @@ async def text_message_router(update: Update, context):
         await conversation_handler(update, context)
         return
 
+    # Waiting for translate input
+    if is_waiting(telegram_id):
+        await translate_message_handler(update, context)
+        return
+
     # Default: no active session
     await update.message.reply_text(
         "Utilise /learn pour commencer une session ou /help pour voir les commandes disponibles."
@@ -74,7 +79,7 @@ def main():
     app.add_handler(CommandHandler("flashcards", flashcards_handler))
     app.add_handler(CommandHandler("progress", progress_handler))
     app.add_handler(CommandHandler("stats", stats_handler))
-    app.add_handler(CommandHandler("translate", traduire_handler))
+    app.add_handler(CommandHandler("translate", translate_handler))
 
     # Callback queries
     app.add_handler(CallbackQueryHandler(learn_level_callback, pattern=r"^learn_level:"))

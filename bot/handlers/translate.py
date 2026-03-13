@@ -1,4 +1,4 @@
-"""Handler for /traduire command."""
+"""Handler for /translate command."""
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -9,21 +9,40 @@ from bot.services.gemini import translate_word
 
 logger = logging.getLogger(__name__)
 
+# Users who typed /translate with no args — awaiting their next message
+_waiting: set = set()
+
 # Pending translation data: telegram_id -> dict with fr/it phrases + original
 _pending: dict = {}
 
 
-async def traduire_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def is_waiting(telegram_id: int) -> bool:
+    return telegram_id in _waiting
+
+
+async def translate_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context):
         return
 
     text = " ".join(context.args).strip() if context.args else ""
     if not text:
+        _waiting.add(update.effective_user.id)
         await update.message.reply_text(
             "Écris un mot ou une phrase en français ou en italien et je te donnerai la traduction avec un exemple."
         )
         return
 
+    await _do_translate(update, text)
+
+
+async def translate_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Called from the text router when user is in waiting state."""
+    telegram_id = update.effective_user.id
+    _waiting.discard(telegram_id)
+    await _do_translate(update, update.message.text.strip())
+
+
+async def _do_translate(update: Update, text: str):
     await update.message.reply_text("Traduction en cours... ⏳")
 
     try:

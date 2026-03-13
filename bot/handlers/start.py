@@ -15,6 +15,7 @@ Je suis ton assistant pour apprendre l'italien. Voici ce que tu peux faire :
 /learn — Commencer une session de conversation par thème
 /verbs — Pratiquer un temps verbal spécifique
 /flashcards — Réviser tes erreurs avec des cartes mémoire
+/translate — Traduire un mot ou une phrase (FR ↔ IT)
 /progress — Voir ta progression par thème
 /stats — Voir tes statistiques d'erreurs
 /help — Afficher cette aide"""
