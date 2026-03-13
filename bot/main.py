@@ -74,7 +74,7 @@ def main():
     app.add_handler(CommandHandler("flashcards", flashcards_handler))
     app.add_handler(CommandHandler("progress", progress_handler))
     app.add_handler(CommandHandler("stats", stats_handler))
-    app.add_handler(CommandHandler("traduire", traduire_handler))
+    app.add_handler(CommandHandler("translate", traduire_handler))
 
     # Callback queries
     app.add_handler(CallbackQueryHandler(learn_level_callback, pattern=r"^learn_level:"))

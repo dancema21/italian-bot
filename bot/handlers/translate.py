@@ -20,8 +20,7 @@ async def traduire_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args).strip() if context.args else ""
     if not text:
         await update.message.reply_text(
-            "Utilisation : /traduire <mot ou phrase>\n"
-            "Exemple : /traduire salut"
+            "Écris un mot ou une phrase en français ou en italien et je te donnerai la traduction avec un exemple."
         )
         return
 
