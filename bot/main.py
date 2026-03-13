@@ -63,7 +63,7 @@ async def text_message_router(update: Update, context):
 
     # Default: no active session
     await update.message.reply_text(
-        "Utilise /learn pour commencer une session ou /help pour voir les commandes disponibles."
+        "Utilise /learn ou /translate pour commencer une session. /help pour voir les autres commandes disponibles."
     )
 
 
