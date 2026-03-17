@@ -47,9 +47,10 @@ def _initialize():
         register(
             project_name=project_name,
             endpoint=endpoint,
-            headers={"api_key": api_key},
-            auto_instrument=True,
+            api_key=api_key,
         )
+        from opentelemetry.instrumentation.google_genai import GoogleGenAiSdkInstrumentor
+        GoogleGenAiSdkInstrumentor().instrument()
         from opentelemetry import trace
         _tracer = trace.get_tracer("italian-bot")
         logger.info(f"Phoenix tracing enabled — project: {project_name}")
