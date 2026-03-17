@@ -86,6 +86,15 @@ async def _do_translate(update: Update, text: str):
     ]])
 
     await update.message.reply_text(message, reply_markup=keyboard)
+    await update.message.reply_text(
+        "─────────────────\n"
+        "/learn — Nouvelle session par thème\n"
+        "/verbs — Pratiquer un temps verbal\n"
+        "/flashcards — Réviser tes erreurs\n"
+        "/translate — Traduire un mot ou une phrase\n"
+        "/progress — Ta progression\n"
+        "/stats — Tes statistiques"
+    )
 
 
 async def traduire_save_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
