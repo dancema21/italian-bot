@@ -12,6 +12,7 @@ WELCOME_MESSAGE = """Benvenuto / Bienvenue ! 🇮🇹
 
 Je suis ton assistant pour apprendre l'italien. Voici ce que tu peux faire :
 
+/ciao — Session personnalisée choisie par l'IA selon tes points faibles
 /learn — Commencer une session de conversation par thème
 /verbs — Pratiquer un temps verbal spécifique
 /flashcards — Réviser tes erreurs avec des cartes mémoire
