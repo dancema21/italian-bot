@@ -77,6 +77,11 @@ VALUES (123456789, 'admin', 'My name');
    GEMINI_API_KEY=your_key_here
    SUPABASE_URL=https://xxxx.supabase.co
    SUPABASE_ANON_KEY=your_anon_key_here
+
+   # Optional — Phoenix Cloud tracing for /ciao agent observability
+   PHOENIX_API_KEY=your_key_here
+   PHOENIX_COLLECTOR_ENDPOINT=https://app.phoenix.arize.com/s/your-space-name/v1/traces
+   PHOENIX_PROJECT_NAME=italian-bot
    ```
 3. Install dependencies:
    ```bash
@@ -94,11 +99,14 @@ VALUES (123456789, 'admin', 'My name');
 1. Push this repository to GitHub
 2. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**
 3. Select your repository
-4. In the Railway project settings → **Variables**, add the four environment variables:
+4. In the Railway project settings → **Variables**, add the required environment variables:
    - `TELEGRAM_BOT_TOKEN`
    - `GEMINI_API_KEY`
    - `SUPABASE_URL`
    - `SUPABASE_ANON_KEY`
+   - *(optional)* `PHOENIX_API_KEY` — Phoenix Cloud API key for `/ciao` agent tracing
+   - *(optional)* `PHOENIX_COLLECTOR_ENDPOINT` — e.g. `https://app.phoenix.arize.com/s/your-space-name/v1/traces`
+   - *(optional)* `PHOENIX_PROJECT_NAME` — defaults to `italian-bot`
 5. Railway will automatically detect the `Dockerfile` and deploy
 
 The bot uses long-polling so no webhook configuration is needed.

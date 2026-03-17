@@ -11,6 +11,7 @@ from bot.utils.access import check_access
 from bot.utils.session import set_session
 from bot.services import supabase as db
 from bot.services.gemini import get_client, MODEL, generate_scene as gemini_generate_scene, build_learn_system_prompt
+from bot.services.tracing import get_tracer
 from bot.services.agent_tools import (
     get_recent_errors,
     get_flashcard_performance,
@@ -112,8 +113,12 @@ async def _run_agent_loop(user_id: int) -> dict | None:
     """
     ReAct loop: LLM calls tools until it calls generate_scene (terminal).
     Returns the generate_scene args dict, or None if capped / errored.
+    The entire loop is wrapped in a Phoenix 'ciao_agent_run' parent span.
+    Each tool call gets a child span.
     """
+    tracer = get_tracer()
     client = get_client()
+
     contents = [
         types.Content(
             role="user",
@@ -121,51 +126,73 @@ async def _run_agent_loop(user_id: int) -> dict | None:
         )
     ]
 
-    for _ in range(MAX_ITERATIONS):
-        try:
-            response = await client.aio.models.generate_content(
-                model=MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=_SYSTEM_PROMPT,
-                    tools=[_AGENT_TOOLS],
-                    temperature=0.3,
-                ),
-            )
-        except Exception as e:
-            logger.error(f"Agent LLM call failed: {e}")
-            return None
+    with tracer.start_as_current_span("ciao_agent_run") as parent_span:
+        parent_span.set_attribute("user_id", str(user_id))
 
-        model_parts = response.candidates[0].content.parts
-        contents.append(types.Content(role="model", parts=model_parts))
-
-        fn_calls = _collect_function_calls(model_parts)
-        if not fn_calls:
-            # No tool calls — unexpected, exit loop
-            break
-
-        fn_responses = []
         terminal = None
+        steps = 0
 
-        for fc in fn_calls:
-            if fc.name == "generate_scene":
-                terminal = dict(fc.args)
-                break
-            result = _execute_tool(fc.name, user_id)
-            fn_responses.append(
-                types.Part.from_function_response(
-                    name=fc.name,
-                    response={"result": result},
+        for _ in range(MAX_ITERATIONS):
+            steps += 1
+
+            try:
+                response = await client.aio.models.generate_content(
+                    model=MODEL,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=_SYSTEM_PROMPT,
+                        tools=[_AGENT_TOOLS],
+                        temperature=0.3,
+                    ),
                 )
-            )
+            except Exception as e:
+                logger.error(f"Agent LLM call failed: {e}")
+                parent_span.set_attribute("steps", steps)
+                parent_span.set_attribute("error", str(e))
+                return None
+
+            model_parts = response.candidates[0].content.parts
+            contents.append(types.Content(role="model", parts=model_parts))
+
+            fn_calls = _collect_function_calls(model_parts)
+            if not fn_calls:
+                break
+
+            fn_responses = []
+            found_terminal = False
+
+            for fc in fn_calls:
+                if fc.name == "generate_scene":
+                    terminal = dict(fc.args)
+                    found_terminal = True
+                    break
+
+                with tracer.start_as_current_span(f"tool.{fc.name}") as tool_span:
+                    tool_span.set_attribute("tool.name", fc.name)
+                    result = _execute_tool(fc.name, user_id)
+                    tool_span.set_attribute("tool.output", str(result)[:500])
+
+                fn_responses.append(
+                    types.Part.from_function_response(
+                        name=fc.name,
+                        response={"result": result},
+                    )
+                )
+
+            if found_terminal:
+                break
+
+            if fn_responses:
+                contents.append(types.Content(role="user", parts=fn_responses))
+
+        parent_span.set_attribute("steps", steps)
 
         if terminal:
-            return terminal
+            parent_span.set_attribute("final.level", terminal.get("level", ""))
+            parent_span.set_attribute("final.topic", terminal.get("topic", ""))
+            parent_span.set_attribute("final.constraints", terminal.get("constraints", "")[:500])
 
-        if fn_responses:
-            contents.append(types.Content(role="user", parts=fn_responses))
-
-    return None
+        return terminal
 
 
 def _fallback_topic(user_id: int) -> tuple[dict | None, str]:
@@ -220,18 +247,24 @@ async def ciao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def _launch_scene(update, context, telegram_id, user_id, topic, constraints):
     """Generate scene and start session — mirrors learn_topic_callback exactly."""
+    tracer = get_tracer()
     cefr_level = topic["cefr_level"]
 
-    try:
-        scene = await gemini_generate_scene(
-            cefr_level=cefr_level,
-            topic_title_it=topic["title_it"],
-            vocabulary_sample=topic["vocabulary"],
-        )
-    except Exception as e:
-        logger.error(f"Scene generation failed: {e}")
-        await update.message.reply_text("Erreur lors de la génération de la scène. Réessaie.")
-        return
+    with tracer.start_as_current_span("ciao_generate_scene") as scene_span:
+        scene_span.set_attribute("topic", topic["title_it"])
+        scene_span.set_attribute("cefr_level", cefr_level)
+        scene_span.set_attribute("constraints", constraints[:500] if constraints else "")
+
+        try:
+            scene = await gemini_generate_scene(
+                cefr_level=cefr_level,
+                topic_title_it=topic["title_it"],
+                vocabulary_sample=topic["vocabulary"],
+            )
+        except Exception as e:
+            logger.error(f"Scene generation failed: {e}")
+            await update.message.reply_text("Erreur lors de la génération de la scène. Réessaie.")
+            return
 
     max_messages = random.randint(10, 15)
     session_number = db.get_completed_session_count(user_id, topic["id"]) + 1

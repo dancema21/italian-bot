@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import bot.services.tracing  # must be imported before handlers so auto-instrumentation is active
+
 from telegram import Update
 from telegram.ext import (
     Application,
