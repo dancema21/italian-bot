@@ -26,15 +26,13 @@ def get_recent_errors(user_id: int) -> list[dict]:
 
 
 def get_flashcard_performance(user_id: int) -> list[dict]:
-    """Flashcards with poor performance (easiness_factor < 2.2 after at least one review)."""
+    """All flashcards ordered by easiness_factor ascending (lowest = most difficult)."""
     try:
         db = get_supabase()
         result = (
             db.table("flashcards")
             .select("easiness_factor, repetitions, errors(corrected_phrase_it, error_category)")
             .eq("user_id", user_id)
-            .lt("easiness_factor", 2.2)
-            .gt("repetitions", 0)
             .order("easiness_factor")
             .limit(20)
             .execute()
