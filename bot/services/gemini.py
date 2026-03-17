@@ -296,7 +296,8 @@ async def translate_word(text: str) -> dict:
         f'The user entered: "{text}"\n\n'
         "1. Detect whether this is French or Italian (ignore spelling mistakes).\n"
         "2. Correct any spelling mistakes in the input.\n"
-        "3. Write one short, natural example sentence using the corrected word/phrase (source language).\n"
+        "3. Write one short, natural example sentence that includes the corrected word/phrase (source language). "
+        "The word may appear in its conjugated form if it is a verb, or in plural if it is a noun — use whatever form fits naturally in the sentence.\n"
         "4. Translate both the corrected word/phrase and the example sentence into the other language.\n\n"
         "Reply ONLY with this JSON, no markdown, no backticks, raw JSON only:\n"
         "{\n"
