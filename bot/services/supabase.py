@@ -236,6 +236,35 @@ def save_errors(session_id: int, user_id: int, topic_id: int | None, errors: lis
         return []
 
 
+def save_session_errors(
+    user_id: int,
+    session_id: int,
+    errors: list[dict],
+    topic: str | None,
+    cefr_level: str | None,
+):
+    """Bulk-insert session errors into session_errors. Fails silently."""
+    if not errors:
+        return
+    try:
+        db = get_supabase()
+        records = [
+            {
+                "user_id": user_id,
+                "session_id": session_id,
+                "wrong": e["wrong"],
+                "correct": e["corrected_it"],
+                "category": e["category"],
+                "topic": topic,
+                "cefr_level": cefr_level,
+            }
+            for e in errors
+        ]
+        db.table("session_errors").insert(records).execute()
+    except Exception as e:
+        logger.warning(f"save_session_errors failed (non-critical): {e}")
+
+
 def save_translation_flashcard(user_id: int, original: str, phrase_fr: str, phrase_it: str) -> bool:
     """Save a /traduire result as a flashcard (no session or topic)."""
     try:

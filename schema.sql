@@ -62,6 +62,19 @@ CREATE TABLE errors (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- All errors from session recaps (append-only analytics table)
+CREATE TABLE session_errors (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT REFERENCES users(id),
+  session_id BIGINT REFERENCES sessions(id),
+  wrong TEXT NOT NULL,
+  correct TEXT NOT NULL,
+  category TEXT NOT NULL,
+  topic TEXT,
+  cefr_level TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Flashcards using SM-2 algorithm
 CREATE TABLE flashcards (
   id BIGSERIAL PRIMARY KEY,

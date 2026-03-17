@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 from bot.utils.access import check_access
 from bot.utils.session import get_session, set_session, clear_session, update_session
 from bot.services import supabase as db
+from bot.services.supabase import save_session_errors
 from bot.services.gemini import (
     generate_scene,
     build_learn_system_prompt,
@@ -291,6 +292,15 @@ async def _trigger_recap(update: Update, telegram_id: int, session: dict):
         db.create_flashcards(session["user_id"], error_ids)
     except Exception as e:
         logger.error(f"Error saving session data: {e}")
+
+    # Persist all errors to session_errors analytics table
+    save_session_errors(
+        user_id=session["user_id"],
+        session_id=session["session_db_id"],
+        errors=session["errors_detected"],
+        topic=session.get("topic_title_it"),
+        cefr_level=session.get("cefr_level"),
+    )
 
     # Save vocabulary tips as flashcards
     if vocab_tips:
