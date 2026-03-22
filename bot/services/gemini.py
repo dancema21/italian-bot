@@ -292,103 +292,74 @@ def extract_vocab_tips(text: str) -> tuple[str, list[dict]]:
 
 
 async def search_italian_news() -> list[dict]:
-    """Search for recent Italian news articles using Gemini + Google Search grounding."""
-    logger.info("search_italian_news: function entered")
-    prompt = (
-        "Using Google Search, find 5 important Italian news articles published today or yesterday.\n"
-        "Only use articles from these trusted, centrist Italian newspapers: "
-        "Corriere della Sera (corriere.it), La Repubblica (repubblica.it), "
-        "La Stampa (lastampa.it), ANSA (ansa.it), RAI News (rainews.it), "
-        "Il Sole 24 Ore (ilsole24ore.com), Il Messaggero (ilmessaggero.it).\n\n"
-        "Reply ONLY with a JSON array, no markdown, no extra text:\n"
-        '[\n'
-        '  {"title": "exact article title in Italian", "source": "newspaper name", '
-        '"url": "https://full-article-url", "summary_fr": "résumé en 2 phrases en français"}\n'
-        ']\n'
-        "Return exactly 5 articles covering different topics."
-    )
+    """Search for recent Italian news articles using Tavily, then summarise with Gemini."""
+    from tavily import AsyncTavilyClient
+
+    logger.info("search_italian_news: searching via Tavily")
+    tavily = AsyncTavilyClient(api_key=os.environ["TAVILY_API_KEY"])
+
     try:
-        client = get_client()
-        logger.info("search_italian_news: calling Gemini API")
-        response = await asyncio.wait_for(
-            client.aio.models.generate_content(
-                model=MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    tools=[types.Tool(google_search=types.GoogleSearch())],
-                    temperature=0.1,
-                ),
-            ),
-            timeout=45.0,
+        results = await tavily.search(
+            query="notizie Italia oggi attualità",
+            search_depth="basic",
+            max_results=8,
+            include_domains=[
+                "corriere.it", "repubblica.it", "lastampa.it",
+                "ansa.it", "rainews.it", "ilsole24ore.com", "ilmessaggero.it",
+            ],
         )
-        logger.info(f"search_italian_news: got response, candidates={len(response.candidates) if response.candidates else 0}")
-
-        # response.text can raise ValueError if response was blocked or has no text parts
-        try:
-            raw = response.text
-        except Exception as text_err:
-            logger.error(f"search_italian_news: response.text failed: {text_err}")
-            # Try to extract text from candidates directly
-            raw = None
-            if response.candidates:
-                for candidate in response.candidates:
-                    if candidate.content and candidate.content.parts:
-                        for part in candidate.content.parts:
-                            if hasattr(part, 'text') and part.text:
-                                raw = part.text
-                                break
-                    if raw:
-                        break
-            if not raw:
-                logger.error(f"search_italian_news: could not extract text, finish_reason={response.candidates[0].finish_reason if response.candidates else 'N/A'}")
-                raise ValueError(f"No text in response: {text_err}") from text_err
-
-        logger.info(f"search_italian_news raw response (first 300 chars): {raw[:300]}")
-        raw = re.sub(r'\s*\[\d+\]', '', raw)   # strip grounding citation markers [1], [2]…
-        raw = _strip_code_fences(raw)
-        match = re.search(r'\[.*\]', raw, re.DOTALL)
-        if not match:
-            logger.error(f"search_italian_news: no JSON array found in response. Full raw: {raw[:500]}")
-            raise ValueError("No JSON array in Gemini response")
-        articles = json.loads(match.group(0))
-        candidates = articles[:5]
-        logger.info(f"search_italian_news: {len(candidates)} candidates before URL check")
-
-        # Validate that each URL is reachable (server responds — even 403 is fine)
-        reachable = await asyncio.gather(
-            *[_is_url_reachable(a.get("url", "")) for a in candidates],
-            return_exceptions=True,
-        )
-        valid = [a for a, ok in zip(candidates, reachable) if ok is True]
-        logger.info(f"URL check: {len(valid)}/{len(candidates)} articles passed")
-        return valid
     except Exception as e:
-        logger.error(f"search_italian_news error: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(f"Tavily search error: {e}", exc_info=True)
         raise
 
+    hits = results.get("results", [])
+    logger.info(f"search_italian_news: Tavily returned {len(hits)} results")
+    if not hits:
+        raise ValueError("Tavily returned no results")
 
-async def _is_url_reachable(url: str) -> bool:
-    """
-    Return True if the URL is reachable.
-    Accepts any server response except 404 and 5xx — a 403 (paywall/bot protection)
-    still means the URL exists and the article is real.
-    """
-    if not url or not url.startswith("http"):
-        logger.warning(f"URL skipped (malformed): {url!r}")
-        return False
+    # Build a compact context block for Gemini to summarise
+    snippets = []
+    for h in hits[:8]:
+        snippets.append(
+            f"TITLE: {h.get('title', '')}\n"
+            f"URL: {h.get('url', '')}\n"
+            f"SNIPPET: {h.get('content', '')[:300]}"
+        )
+    context = "\n\n---\n\n".join(snippets)
+
+    prompt = (
+        "Below are recent Italian news articles found via web search.\n"
+        "Select the 5 most interesting and diverse articles.\n"
+        "For each, write a 2-sentence summary IN FRENCH.\n\n"
+        f"{context}\n\n"
+        "Reply ONLY with a JSON array, no markdown, no backticks:\n"
+        '[\n'
+        '  {"title": "article title", "source": "domain name (e.g. corriere.it)", '
+        '"url": "https://full-url", "summary_fr": "résumé en 2 phrases en français"}\n'
+        ']\n'
+        "Return exactly 5 objects."
+    )
+
     try:
-        import httpx
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; ItalianBot/1.0)"}
-        async with httpx.AsyncClient(follow_redirects=True, timeout=6.0) as client:
-            response = await client.head(url, headers=headers)
-            if response.status_code == 405:
-                response = await client.get(url, headers=headers)
-            ok = response.status_code != 404 and response.status_code < 500
-            logger.info(f"URL check {response.status_code} {'✓' if ok else '✗'} {url}")
-            return ok
+        client = get_client()
+        logger.info("search_italian_news: calling Gemini to summarise")
+        response = await client.aio.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.2),
+        )
+        raw = _strip_code_fences(response.text)
+        match = re.search(r'\[.*\]', raw, re.DOTALL)
+        if not match:
+            logger.error(f"search_italian_news: no JSON array in Gemini response: {raw[:300]}")
+            raise ValueError("No JSON array in Gemini response")
+        articles = json.loads(match.group(0))[:5]
+        logger.info(f"search_italian_news: {len(articles)} articles ready")
+        return articles
     except Exception as e:
-        logger.warning(f"URL check failed ({url}): {e}")
-        return False
+        logger.error(f"search_italian_news Gemini summarise error: {type(e).__name__}: {e}", exc_info=True)
+        raise
+
 
 
 def _build_notizie_system_prompt(article: dict, message_count: int) -> str:
