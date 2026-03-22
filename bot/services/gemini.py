@@ -300,8 +300,9 @@ async def search_italian_news() -> list[dict]:
 
     try:
         results = await tavily.search(
-            query="notizie Italia oggi attualità",
-            search_depth="basic",
+            query="notizie Italia attualità",
+            topic="news",
+            days=2,
             max_results=8,
             include_domains=[
                 "corriere.it", "repubblica.it", "lastampa.it",
