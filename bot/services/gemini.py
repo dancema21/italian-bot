@@ -317,15 +317,18 @@ async def search_italian_news() -> list[dict]:
             ),
         )
         raw = response.text
+        logger.info(f"search_italian_news raw response (first 300 chars): {raw[:300]}")
         raw = re.sub(r'\s*\[\d+\]', '', raw)   # strip grounding citation markers [1], [2]…
         raw = _strip_code_fences(raw)
         match = re.search(r'\[.*\]', raw, re.DOTALL)
-        if match:
-            raw = match.group(0)
-        articles = json.loads(raw)
+        if not match:
+            logger.error("search_italian_news: no JSON array found in response")
+            raise ValueError("No JSON array in Gemini response")
+        articles = json.loads(match.group(0))
         candidates = articles[:5]
+        logger.info(f"search_italian_news: {len(candidates)} candidates before URL check")
 
-        # Validate each URL actually returns a webpage
+        # Validate that each URL is reachable (server responds — even 403 is fine)
         reachable = await asyncio.gather(
             *[_is_url_reachable(a.get("url", "")) for a in candidates],
             return_exceptions=True,
@@ -339,19 +342,26 @@ async def search_italian_news() -> list[dict]:
 
 
 async def _is_url_reachable(url: str) -> bool:
-    """Return True if the URL responds with a non-error HTTP status."""
+    """
+    Return True if the URL is reachable.
+    Accepts any server response except 404 and 5xx — a 403 (paywall/bot protection)
+    still means the URL exists and the article is real.
+    """
     if not url or not url.startswith("http"):
+        logger.warning(f"URL skipped (malformed): {url!r}")
         return False
     try:
         import httpx
         headers = {"User-Agent": "Mozilla/5.0 (compatible; ItalianBot/1.0)"}
         async with httpx.AsyncClient(follow_redirects=True, timeout=6.0) as client:
-            # Try HEAD first (faster); fall back to GET if blocked (405)
             response = await client.head(url, headers=headers)
             if response.status_code == 405:
                 response = await client.get(url, headers=headers)
-            return response.status_code < 400
-    except Exception:
+            ok = response.status_code != 404 and response.status_code < 500
+            logger.info(f"URL check {response.status_code} {'✓' if ok else '✗'} {url}")
+            return ok
+    except Exception as e:
+        logger.warning(f"URL check failed ({url}): {e}")
         return False
 
 
