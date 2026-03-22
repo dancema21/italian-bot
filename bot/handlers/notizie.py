@@ -58,15 +58,20 @@ async def notizie_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "articles": articles,
     }
 
-    buttons = []
-    for i, article in enumerate(articles):
-        title = article.get("title", "")
-        source = article.get("source", "")
-        label = f"📰 {title[:45]}{'…' if len(title) > 45 else ''} — {source}"
-        buttons.append([InlineKeyboardButton(label, callback_data=f"nz_topic:{i}")])
+    lines = ["<b>Actualités italiennes du jour :</b>\n"]
+    for i, article in enumerate(articles, 1):
+        title = html.escape(article.get("title", ""))
+        source = html.escape(article.get("source", ""))
+        summary = html.escape(article.get("summary_fr", ""))
+        lines.append(f"<b>{i}. {title}</b> — <i>{source}</i>\n{summary}")
+
+    buttons = [
+        [InlineKeyboardButton(str(i + 1), callback_data=f"nz_topic:{i}") for i in range(len(articles))]
+    ]
 
     await update.message.reply_text(
-        "Choisis un article à lire et à discuter en italien :",
+        "\n\n".join(lines) + "\n\nChoisis un article :",
+        parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
 
