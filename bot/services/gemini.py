@@ -300,10 +300,14 @@ async def search_italian_news() -> list[dict]:
 
     try:
         results = await tavily.search(
-            query="Italy news today",
+            query="ultime notizie Italia oggi",
             topic="news",
             days=2,
             max_results=8,
+            include_domains=[
+                "ansa.it", "rainews.it", "tgcom24.mediaset.it",
+                "fanpage.it", "ilfattoquotidiano.it", "open.online",
+            ],
         )
     except Exception as e:
         logger.error(f"Tavily search error: {e}", exc_info=True)
