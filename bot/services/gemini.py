@@ -329,14 +329,15 @@ async def search_italian_news() -> list[dict]:
 
     prompt = (
         "Below are recent Italian news articles found via web search.\n"
-        "Select the 5 most interesting and diverse articles.\n\n"
+        "Select articles that cover DIFFERENT topics — if several articles are about the same event or subject, keep only the best one.\n"
+        "Return between 1 and 5 articles depending on how many truly distinct topics are available.\n\n"
         f"{context}\n\n"
         "Reply ONLY with a JSON array, no markdown, no backticks:\n"
         '[\n'
         '  {"title": "article title in Italian", "source": "newspaper name (e.g. Corriere della Sera)", '
         '"url": "https://full-url"}\n'
         ']\n'
-        "Return exactly 5 objects."
+        "Never include two articles about the same topic."
     )
 
     try:
