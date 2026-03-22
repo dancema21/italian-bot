@@ -329,13 +329,12 @@ async def search_italian_news() -> list[dict]:
 
     prompt = (
         "Below are recent Italian news articles found via web search.\n"
-        "Select the 5 most interesting and diverse articles.\n"
-        "For each, write a 2-sentence summary IN FRENCH.\n\n"
+        "Select the 5 most interesting and diverse articles.\n\n"
         f"{context}\n\n"
         "Reply ONLY with a JSON array, no markdown, no backticks:\n"
         '[\n'
-        '  {"title": "article title", "source": "domain name (e.g. corriere.it)", '
-        '"url": "https://full-url", "summary_fr": "résumé en 2 phrases en français"}\n'
+        '  {"title": "article title in Italian", "source": "newspaper name (e.g. Corriere della Sera)", '
+        '"url": "https://full-url"}\n'
         ']\n'
         "Return exactly 5 objects."
     )

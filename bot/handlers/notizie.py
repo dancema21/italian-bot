@@ -62,8 +62,7 @@ async def notizie_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for i, article in enumerate(articles, 1):
         title = html.escape(article.get("title", ""))
         source = html.escape(article.get("source", ""))
-        summary = html.escape(article.get("summary_fr", ""))
-        lines.append(f"<b>{i}. {title}</b> — <i>{source}</i>\n{summary}")
+        lines.append(f"{i}. {title} — <i>{source}</i>")
 
     buttons = [
         [InlineKeyboardButton(str(i + 1), callback_data=f"nz_topic:{i}") for i in range(len(articles))]
