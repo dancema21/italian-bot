@@ -310,13 +310,16 @@ async def search_italian_news() -> list[dict]:
     try:
         client = get_client()
         logger.info("search_italian_news: calling Gemini API")
-        response = await client.aio.models.generate_content(
-            model=MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-                temperature=0.1,
+        response = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model=MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                    temperature=0.1,
+                ),
             ),
+            timeout=45.0,
         )
         logger.info(f"search_italian_news: got response, candidates={len(response.candidates) if response.candidates else 0}")
 
