@@ -300,20 +300,18 @@ async def search_italian_news() -> list[dict]:
 
     try:
         results = await tavily.search(
-            query="notizie Italia attualità",
+            query="Italy news today",
             topic="news",
             days=2,
             max_results=8,
-            include_domains=[
-                "corriere.it", "repubblica.it", "lastampa.it",
-                "ansa.it", "rainews.it", "ilmessaggero.it",
-            ],
         )
     except Exception as e:
         logger.error(f"Tavily search error: {e}", exc_info=True)
         raise
 
     hits = results.get("results", [])
+    for h in hits:
+        logger.info(f"Tavily result: {h.get('url')} — {h.get('title', '')[:60]}")
     logger.info(f"search_italian_news: Tavily returned {len(hits)} results")
     if not hits:
         raise ValueError("Tavily returned no results")
@@ -329,9 +327,11 @@ async def search_italian_news() -> list[dict]:
     context = "\n\n".join(snippets)
 
     prompt = (
-        "Below are recent Italian news articles (numbered 0–7).\n"
-        "Select articles that cover DIFFERENT topics — if several are about the same event, keep only the best one.\n"
-        "Return between 1 and 5 indices depending on how many truly distinct topics are available.\n\n"
+        "Below are recent news articles (numbered 0–7).\n"
+        "Select only articles about Italian domestic news (politics, economy, society, culture, sport in Italy).\n"
+        "Exclude articles about international news unrelated to Italy.\n"
+        "Among the Italian articles, keep only ones that cover DIFFERENT topics — if several are about the same event, keep the best one.\n"
+        "Return between 1 and 5 indices depending on how many distinct Italian articles are available.\n\n"
         f"{context}\n\n"
         "Reply ONLY with a JSON array of selected indices, e.g. [0, 2, 5]. No other text."
     )
