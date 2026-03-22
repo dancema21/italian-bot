@@ -293,6 +293,7 @@ def extract_vocab_tips(text: str) -> tuple[str, list[dict]]:
 
 async def search_italian_news() -> list[dict]:
     """Search for recent Italian news articles using Gemini + Google Search grounding."""
+    logger.info("search_italian_news: function entered")
     prompt = (
         "Using Google Search, find 5 important Italian news articles published today or yesterday.\n"
         "Only use articles from these trusted, centrist Italian newspapers: "
@@ -308,6 +309,7 @@ async def search_italian_news() -> list[dict]:
     )
     try:
         client = get_client()
+        logger.info("search_italian_news: calling Gemini API")
         response = await client.aio.models.generate_content(
             model=MODEL,
             contents=prompt,
@@ -316,13 +318,34 @@ async def search_italian_news() -> list[dict]:
                 temperature=0.1,
             ),
         )
-        raw = response.text
+        logger.info(f"search_italian_news: got response, candidates={len(response.candidates) if response.candidates else 0}")
+
+        # response.text can raise ValueError if response was blocked or has no text parts
+        try:
+            raw = response.text
+        except Exception as text_err:
+            logger.error(f"search_italian_news: response.text failed: {text_err}")
+            # Try to extract text from candidates directly
+            raw = None
+            if response.candidates:
+                for candidate in response.candidates:
+                    if candidate.content and candidate.content.parts:
+                        for part in candidate.content.parts:
+                            if hasattr(part, 'text') and part.text:
+                                raw = part.text
+                                break
+                    if raw:
+                        break
+            if not raw:
+                logger.error(f"search_italian_news: could not extract text, finish_reason={response.candidates[0].finish_reason if response.candidates else 'N/A'}")
+                raise ValueError(f"No text in response: {text_err}") from text_err
+
         logger.info(f"search_italian_news raw response (first 300 chars): {raw[:300]}")
         raw = re.sub(r'\s*\[\d+\]', '', raw)   # strip grounding citation markers [1], [2]…
         raw = _strip_code_fences(raw)
         match = re.search(r'\[.*\]', raw, re.DOTALL)
         if not match:
-            logger.error("search_italian_news: no JSON array found in response")
+            logger.error(f"search_italian_news: no JSON array found in response. Full raw: {raw[:500]}")
             raise ValueError("No JSON array in Gemini response")
         articles = json.loads(match.group(0))
         candidates = articles[:5]
@@ -337,7 +360,7 @@ async def search_italian_news() -> list[dict]:
         logger.info(f"URL check: {len(valid)}/{len(candidates)} articles passed")
         return valid
     except Exception as e:
-        logger.error(f"search_italian_news error: {e}")
+        logger.error(f"search_italian_news error: {type(e).__name__}: {e}", exc_info=True)
         raise
 
 
