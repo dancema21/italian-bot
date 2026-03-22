@@ -305,7 +305,7 @@ async def search_italian_news() -> list[dict]:
             max_results=8,
             include_domains=[
                 "corriere.it", "repubblica.it", "lastampa.it",
-                "ansa.it", "rainews.it", "ilsole24ore.com", "ilmessaggero.it",
+                "ansa.it", "rainews.it", "ilmessaggero.it",
             ],
         )
     except Exception as e:
@@ -317,43 +317,50 @@ async def search_italian_news() -> list[dict]:
     if not hits:
         raise ValueError("Tavily returned no results")
 
-    # Build a compact context block for Gemini to summarise
+    # Build a numbered context block for Gemini to select from
     snippets = []
-    for h in hits[:8]:
+    for i, h in enumerate(hits[:8]):
         snippets.append(
-            f"TITLE: {h.get('title', '')}\n"
-            f"URL: {h.get('url', '')}\n"
-            f"SNIPPET: {h.get('content', '')[:300]}"
+            f"[{i}] TITLE: {h.get('title', '')}\n"
+            f"    SOURCE: {h.get('url', '').split('/')[2] if h.get('url') else ''}\n"
+            f"    SNIPPET: {h.get('content', '')[:200]}"
         )
-    context = "\n\n---\n\n".join(snippets)
+    context = "\n\n".join(snippets)
 
     prompt = (
-        "Below are recent Italian news articles found via web search.\n"
-        "Select articles that cover DIFFERENT topics — if several articles are about the same event or subject, keep only the best one.\n"
-        "Return between 1 and 5 articles depending on how many truly distinct topics are available.\n\n"
+        "Below are recent Italian news articles (numbered 0–7).\n"
+        "Select articles that cover DIFFERENT topics — if several are about the same event, keep only the best one.\n"
+        "Return between 1 and 5 indices depending on how many truly distinct topics are available.\n\n"
         f"{context}\n\n"
-        "Reply ONLY with a JSON array, no markdown, no backticks:\n"
-        '[\n'
-        '  {"title": "article title in Italian", "source": "newspaper name (e.g. Corriere della Sera)", '
-        '"url": "https://full-url"}\n'
-        ']\n'
-        "Never include two articles about the same topic."
+        "Reply ONLY with a JSON array of selected indices, e.g. [0, 2, 5]. No other text."
     )
 
     try:
         client = get_client()
-        logger.info("search_italian_news: calling Gemini to summarise")
+        logger.info("search_italian_news: calling Gemini to select articles")
         response = await client.aio.models.generate_content(
             model=MODEL,
             contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.2),
+            config=types.GenerateContentConfig(temperature=0.1),
         )
         raw = _strip_code_fences(response.text)
         match = re.search(r'\[.*\]', raw, re.DOTALL)
         if not match:
             logger.error(f"search_italian_news: no JSON array in Gemini response: {raw[:300]}")
             raise ValueError("No JSON array in Gemini response")
-        articles = json.loads(match.group(0))[:5]
+        indices = json.loads(match.group(0))
+
+        # Build articles from original Tavily data (URLs are real, not hallucinated)
+        articles = []
+        for idx in indices[:5]:
+            if isinstance(idx, int) and 0 <= idx < len(hits):
+                h = hits[idx]
+                domain = h.get("url", "").split("/")[2] if h.get("url") else ""
+                articles.append({
+                    "title": h.get("title", ""),
+                    "source": domain,
+                    "url": h.get("url", ""),
+                })
         logger.info(f"search_italian_news: {len(articles)} articles ready")
         return articles
     except Exception as e:
