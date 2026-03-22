@@ -1,5 +1,6 @@
 """All Gemini API calls using the google-genai SDK."""
 from __future__ import annotations
+import asyncio
 import json
 import logging
 import os
@@ -322,10 +323,40 @@ async def search_italian_news() -> list[dict]:
         if match:
             raw = match.group(0)
         articles = json.loads(raw)
-        return articles[:5]
+        candidates = articles[:5]
+
+        # Validate each URL actually returns a webpage
+        reachable = await asyncio.gather(
+            *[_is_url_reachable(a.get("url", "")) for a in candidates],
+            return_exceptions=True,
+        )
+        valid = [a for a, ok in zip(candidates, reachable) if ok is True]
+        if not valid:
+            logger.warning("All article URLs failed reachability check — returning unvalidated list")
+            return candidates
+        if len(valid) < len(candidates):
+            logger.info(f"URL check: {len(valid)}/{len(candidates)} articles passed")
+        return valid
     except Exception as e:
         logger.error(f"search_italian_news error: {e}")
         raise
+
+
+async def _is_url_reachable(url: str) -> bool:
+    """Return True if the URL responds with a non-error HTTP status."""
+    if not url or not url.startswith("http"):
+        return False
+    try:
+        import httpx
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; ItalianBot/1.0)"}
+        async with httpx.AsyncClient(follow_redirects=True, timeout=6.0) as client:
+            # Try HEAD first (faster); fall back to GET if blocked (405)
+            response = await client.head(url, headers=headers)
+            if response.status_code == 405:
+                response = await client.get(url, headers=headers)
+            return response.status_code < 400
+    except Exception:
+        return False
 
 
 def _build_notizie_system_prompt(article: dict, message_count: int) -> str:
