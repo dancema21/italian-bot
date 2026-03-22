@@ -290,6 +290,107 @@ def extract_vocab_tips(text: str) -> tuple[str, list[dict]]:
     return text, []
 
 
+async def search_italian_news() -> list[dict]:
+    """Search for recent Italian news articles using Gemini + Google Search grounding."""
+    prompt = (
+        "Using Google Search, find 5 important Italian news articles published today or yesterday.\n"
+        "Only use articles from these trusted, centrist Italian newspapers: "
+        "Corriere della Sera (corriere.it), La Repubblica (repubblica.it), "
+        "La Stampa (lastampa.it), ANSA (ansa.it), RAI News (rainews.it), "
+        "Il Sole 24 Ore (ilsole24ore.com), Il Messaggero (ilmessaggero.it).\n\n"
+        "Reply ONLY with a JSON array, no markdown, no extra text:\n"
+        '[\n'
+        '  {"title": "exact article title in Italian", "source": "newspaper name", '
+        '"url": "https://full-article-url", "summary_fr": "résumé en 2 phrases en français"}\n'
+        ']\n'
+        "Return exactly 5 articles covering different topics."
+    )
+    try:
+        client = get_client()
+        response = await client.aio.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                tools=[types.Tool(google_search=types.GoogleSearch())],
+                temperature=0.1,
+            ),
+        )
+        raw = response.text
+        raw = re.sub(r'\s*\[\d+\]', '', raw)   # strip grounding citation markers [1], [2]…
+        raw = _strip_code_fences(raw)
+        match = re.search(r'\[.*\]', raw, re.DOTALL)
+        if match:
+            raw = match.group(0)
+        articles = json.loads(raw)
+        return articles[:5]
+    except Exception as e:
+        logger.error(f"search_italian_news error: {e}")
+        raise
+
+
+def _build_notizie_system_prompt(article: dict, message_count: int) -> str:
+    if message_count < 3:
+        focus = (
+            "Phase compréhension : pose 1 ou 2 questions ouvertes en italien pour vérifier "
+            "que l'utilisateur a bien compris l'article. Demande-lui de résumer les faits, "
+            "d'identifier les acteurs impliqués ou d'expliquer les événements principaux. "
+            "Ne donne pas les réponses toi-même — laisse l'utilisateur s'exprimer."
+        )
+    else:
+        focus = (
+            "Phase analyse : engage une discussion plus profonde en italien. "
+            "Explore les implications de l'événement, le contexte historique ou politique, "
+            "des situations similaires dans d'autres pays ou dans le passé, "
+            "et ce qui pourrait se passer ensuite. Partage ton point de vue et invite l'utilisateur à réagir."
+        )
+    return (
+        "Tu discutes d'un article d'actualité avec un apprenant de l'italien.\n"
+        f"Article : \"{article['title']}\" ({article['source']})\n\n"
+        "Règles absolues :\n"
+        "1. Réponds TOUJOURS en italien, même si l'utilisateur écrit en français.\n"
+        "2. Sois concis : 3 à 5 phrases par réponse maximum.\n"
+        "3. Si l'utilisateur fait une erreur d'italien notable, signale-la brièvement "
+        "à la fin de ta réponse entre parenthèses : (NB: si dice '...' non '...')\n"
+        f"4. {focus}"
+    )
+
+
+async def notizie_chat(
+    article: dict,
+    conversation_history: list[dict],
+    user_message: str,
+    message_count: int,
+) -> str:
+    """Handle one turn of a news article discussion in Italian."""
+    system_prompt = _build_notizie_system_prompt(article, message_count)
+
+    contents = []
+    for turn in conversation_history:
+        contents.append(types.Content(
+            role=turn["role"],
+            parts=[types.Part(text=p) for p in turn["parts"]],
+        ))
+    contents.append(types.Content(
+        role="user",
+        parts=[types.Part(text=user_message)],
+    ))
+
+    try:
+        client = get_client()
+        response = await client.aio.models.generate_content(
+            model=MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.7,
+            ),
+        )
+        return response.text
+    except Exception as e:
+        logger.error(f"notizie_chat error: {e}")
+        raise
+
+
 async def translate_word(text: str) -> dict:
     """Detect language (FR/IT), correct spelling, translate, return example sentences."""
     prompt = (

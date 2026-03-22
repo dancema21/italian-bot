@@ -35,6 +35,7 @@ from bot.handlers.progress import progress_handler
 from bot.handlers.stats import stats_handler
 from bot.handlers.translate import translate_handler, translate_message_handler, traduire_save_callback, is_waiting
 from bot.handlers.ciao import ciao_handler
+from bot.handlers.notizie import notizie_handler, notizie_topic_callback, notizie_message_handler, is_in_notizie_session
 from bot.utils.session import get_session
 
 logging.basicConfig(
@@ -57,6 +58,11 @@ async def text_message_router(update: Update, context):
     # Active conversation session
     if get_session(telegram_id) is not None:
         await conversation_handler(update, context)
+        return
+
+    # Active notizie discussion
+    if is_in_notizie_session(telegram_id):
+        await notizie_message_handler(update, context)
         return
 
     # Waiting for translate input
@@ -84,6 +90,7 @@ def main():
     app.add_handler(CommandHandler("stats", stats_handler))
     app.add_handler(CommandHandler("translate", translate_handler))
     app.add_handler(CommandHandler("ciao", ciao_handler))
+    app.add_handler(CommandHandler("notizie", notizie_handler))
 
     # Callback queries
     app.add_handler(CallbackQueryHandler(learn_level_callback, pattern=r"^learn_level:"))
@@ -92,6 +99,7 @@ def main():
     app.add_handler(CallbackQueryHandler(flashcard_reveal_callback, pattern=r"^fc_reveal:"))
     app.add_handler(CallbackQueryHandler(flashcard_rating_callback, pattern=r"^fc_rate:"))
     app.add_handler(CallbackQueryHandler(traduire_save_callback, pattern=r"^tr_save:"))
+    app.add_handler(CallbackQueryHandler(notizie_topic_callback, pattern=r"^nz_topic:"))
 
     # Text message router
     app.add_handler(

@@ -274,6 +274,7 @@ async def _trigger_recap(update: Update, telegram_id: int, session: dict):
     await update.message.reply_text(
         "─────────────────\n"
         "/ciao — Session personnalisée par l'IA\n"
+        "/notizie — Lire et discuter un article\n"
         "/learn — Nouvelle session par thème\n"
         "/verbs — Pratiquer un temps verbal\n"
         "/flashcards — Réviser tes erreurs\n"
