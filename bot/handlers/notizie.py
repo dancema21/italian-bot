@@ -48,7 +48,9 @@ async def notizie_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not articles:
-        await update.message.reply_text("Aucun article trouvé. Réessaie plus tard.")
+        await update.message.reply_text(
+            "Aucun article valide trouvé pour le moment. Réessaie dans quelques instants."
+        )
         return
 
     notizie_sessions[telegram_id] = {

@@ -331,11 +331,7 @@ async def search_italian_news() -> list[dict]:
             return_exceptions=True,
         )
         valid = [a for a, ok in zip(candidates, reachable) if ok is True]
-        if not valid:
-            logger.warning("All article URLs failed reachability check — returning unvalidated list")
-            return candidates
-        if len(valid) < len(candidates):
-            logger.info(f"URL check: {len(valid)}/{len(candidates)} articles passed")
+        logger.info(f"URL check: {len(valid)}/{len(candidates)} articles passed")
         return valid
     except Exception as e:
         logger.error(f"search_italian_news error: {e}")
