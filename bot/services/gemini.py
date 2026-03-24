@@ -291,53 +291,71 @@ def extract_vocab_tips(text: str) -> tuple[str, list[dict]]:
     return text, []
 
 
-async def search_italian_news() -> list[dict]:
-    """Search for recent Italian news articles using Tavily, then summarise with Gemini."""
-    from tavily import AsyncTavilyClient
+_RSS_FEEDS = [
+    ("ANSA", "https://www.ansa.it/sito/notizie/topnews/topnews_rss.xml"),
+    ("Il Messaggero", "https://www.ilmessaggero.it/rss/home.xml"),
+    ("Il Giornale", "https://www.ilgiornale.it/rss.xml"),
+]
 
-    logger.info("search_italian_news: searching via Tavily")
-    tavily = AsyncTavilyClient(api_key=os.environ["TAVILY_API_KEY"])
+
+async def _fetch_rss(source: str, url: str) -> list[dict]:
+    """Fetch one RSS feed and return up to 5 articles as dicts."""
+    import httpx
+    import xml.etree.ElementTree as ET
 
     try:
-        results = await tavily.search(
-            query="ultime notizie Italia oggi",
-            topic="news",
-            days=2,
-            max_results=8,
-            include_domains=[
-                "ansa.it", "rainews.it", "tgcom24.mediaset.it",
-                "fanpage.it", "ilfattoquotidiano.it", "open.online",
-            ],
-        )
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+        root = ET.fromstring(resp.text)
+        items = root.findall(".//item")[:5]
+        articles = []
+        for item in items:
+            title = (item.findtext("title") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            description = (item.findtext("description") or "").strip()
+            # Strip HTML tags from description
+            description = re.sub(r"<[^>]+>", "", description)[:200]
+            if title and link:
+                articles.append({"title": title, "url": link, "source": source, "snippet": description})
+        logger.info(f"RSS {source}: {len(articles)} articles fetched")
+        return articles
     except Exception as e:
-        logger.error(f"Tavily search error: {e}", exc_info=True)
-        raise
+        logger.warning(f"RSS fetch failed for {source}: {e}")
+        return []
 
-    hits = results.get("results", [])
-    for h in hits:
-        logger.info(f"Tavily result: {h.get('url')} — {h.get('title', '')[:60]}")
-    logger.info(f"search_italian_news: Tavily returned {len(hits)} results")
-    if not hits:
-        raise ValueError("Tavily returned no results")
 
-    # Build a numbered context block for Gemini to select from
+async def search_italian_news() -> list[dict]:
+    """Fetch Italian news from RSS feeds, then use Gemini to pick distinct articles."""
+    logger.info("search_italian_news: fetching RSS feeds")
+
+    feed_results = await asyncio.gather(
+        *[_fetch_rss(source, url) for source, url in _RSS_FEEDS]
+    )
+    all_articles = [a for feed in feed_results for a in feed]
+    logger.info(f"search_italian_news: {len(all_articles)} total articles before selection")
+
+    if not all_articles:
+        raise ValueError("All RSS feeds failed")
+
+    # Build numbered context for Gemini
     snippets = []
-    for i, h in enumerate(hits[:8]):
+    for i, a in enumerate(all_articles):
         snippets.append(
-            f"[{i}] TITLE: {h.get('title', '')}\n"
-            f"    SOURCE: {h.get('url', '').split('/')[2] if h.get('url') else ''}\n"
-            f"    SNIPPET: {h.get('content', '')[:200]}"
+            f"[{i}] {a['source']} — {a['title']}\n"
+            f"    {a['snippet']}"
         )
     context = "\n\n".join(snippets)
+    n = len(all_articles) - 1
 
     prompt = (
-        "Below are recent news articles (numbered 0–7).\n"
+        f"Below are recent Italian news articles (numbered 0–{n}).\n"
         "Select only articles about Italian domestic news (politics, economy, society, culture, sport in Italy).\n"
-        "Exclude articles about international news unrelated to Italy.\n"
-        "Among the Italian articles, keep only ones that cover DIFFERENT topics — if several are about the same event, keep the best one.\n"
-        "Return between 1 and 5 indices depending on how many distinct Italian articles are available.\n\n"
+        "Exclude international news unrelated to Italy.\n"
+        "Keep only articles covering DIFFERENT topics — if several cover the same event, keep only the best one.\n"
+        "Return between 1 and 5 indices.\n\n"
         f"{context}\n\n"
-        "Reply ONLY with a JSON array of selected indices, e.g. [0, 2, 5]. No other text."
+        "Reply ONLY with a JSON array of indices, e.g. [0, 3, 7]. No other text."
     )
 
     try:
@@ -349,27 +367,21 @@ async def search_italian_news() -> list[dict]:
             config=types.GenerateContentConfig(temperature=0.1),
         )
         raw = _strip_code_fences(response.text)
-        match = re.search(r'\[.*\]', raw, re.DOTALL)
+        match = re.search(r'\[.*?\]', raw, re.DOTALL)
         if not match:
             logger.error(f"search_italian_news: no JSON array in Gemini response: {raw[:300]}")
             raise ValueError("No JSON array in Gemini response")
         indices = json.loads(match.group(0))
 
-        # Build articles from original Tavily data (URLs are real, not hallucinated)
         articles = []
         for idx in indices[:5]:
-            if isinstance(idx, int) and 0 <= idx < len(hits):
-                h = hits[idx]
-                domain = h.get("url", "").split("/")[2] if h.get("url") else ""
-                articles.append({
-                    "title": h.get("title", ""),
-                    "source": domain,
-                    "url": h.get("url", ""),
-                })
-        logger.info(f"search_italian_news: {len(articles)} articles ready")
+            if isinstance(idx, int) and 0 <= idx < len(all_articles):
+                a = all_articles[idx]
+                articles.append({"title": a["title"], "source": a["source"], "url": a["url"]})
+        logger.info(f"search_italian_news: {len(articles)} articles selected")
         return articles
     except Exception as e:
-        logger.error(f"search_italian_news Gemini summarise error: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(f"search_italian_news error: {type(e).__name__}: {e}", exc_info=True)
         raise
 
 
