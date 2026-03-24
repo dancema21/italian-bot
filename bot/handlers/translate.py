@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 from bot.utils.access import check_access
 from bot.services import supabase as db
 from bot.services.gemini import translate_word
+from bot.handlers.notizie import notizie_sessions
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ async def translate_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = " ".join(context.args).strip() if context.args else ""
     if not text:
+        notizie_sessions.pop(update.effective_user.id, None)
         _waiting.add(update.effective_user.id)
         await update.message.reply_text(
             "Écris un mot ou une phrase en français ou en italien et je te donnerai la traduction avec un exemple."

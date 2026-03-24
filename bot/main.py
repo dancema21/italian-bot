@@ -62,14 +62,14 @@ async def text_message_router(update: Update, context):
         await conversation_handler(update, context)
         return
 
+    # Waiting for translate input (checked before notizie — /translate is an explicit intent)
+    if is_waiting(telegram_id):
+        await translate_message_handler(update, context)
+        return
+
     # Active notizie discussion
     if is_in_notizie_session(telegram_id):
         await notizie_message_handler(update, context)
-        return
-
-    # Waiting for translate input
-    if is_waiting(telegram_id):
-        await translate_message_handler(update, context)
         return
 
     # Default: no active session
