@@ -455,15 +455,16 @@ async def translate_word(text: str) -> dict:
         f'The user entered: "{text}"\n\n'
         "1. Detect whether this is French or Italian (ignore spelling mistakes).\n"
         "2. Correct any spelling mistakes in the input.\n"
-        "3. Write one short, natural example sentence that includes the corrected word/phrase (source language). "
-        "The word may appear in its conjugated form if it is a verb, or in plural if it is a noun — use whatever form fits naturally in the sentence.\n"
-        "4. Translate both the corrected word/phrase and the example sentence into the other language.\n\n"
+        "3. If the input is a single word and is a conjugated verb, use the infinitive form as the word to translate (source_word and target_word must be infinitives).\n"
+        "4. Write one short, natural example sentence in the source language. "
+        "The word may appear conjugated if it is a verb, or in plural if it is a noun — use whatever form fits naturally.\n"
+        "5. Translate both the word/phrase and the example sentence into the other language.\n\n"
         "Reply ONLY with this JSON, no markdown, no backticks, raw JSON only:\n"
         "{\n"
         '  "source_lang": "fr",\n'
-        '  "source_word": "corrected word/phrase in source language",\n'
+        '  "source_word": "infinitive or base form in source language",\n'
         '  "source_sentence": "example sentence in source language",\n'
-        '  "target_word": "translation in target language",\n'
+        '  "target_word": "infinitive or base form in target language",\n'
         '  "target_sentence": "translated example sentence in target language"\n'
         "}\n"
         'source_lang must be "fr" if the input is French, "it" if Italian.'
